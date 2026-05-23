@@ -1,0 +1,20 @@
+services:
+  bailiff:
+    build: .
+    image: chamberlain/bailiff:latest
+    container_name: bailiff
+    restart: unless-stopped
+    network_mode: host
+    env_file: .env
+    environment:
+      BAILIFF_TRANSPORT: ${BAILIFF_TRANSPORT:-http}
+      BAILIFF_HOST: ${BAILIFF_HOST:-0.0.0.0}
+      BAILIFF_PORT: ${BAILIFF_PORT:-8100}
+      BAILIFF_PATH: ${BAILIFF_PATH:-/mcp}
+      CATCHPOLE_URL: ${CATCHPOLE_URL:-http://localhost:4000}
+      CATCHPOLE_API_KEY: ${CATCHPOLE_API_KEY:-}
+      CATCHPOLE_MODEL: ${CATCHPOLE_MODEL:-lm_studio/local}
+      SCRIBE_URL: ${SCRIBE_URL:-http://localhost:8000/mcp}
+      SCRIBE_LABEL: ${SCRIBE_LABEL:-scribe}
+      BAILIFF_TIMEOUT: ${BAILIFF_TIMEOUT:-180}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
