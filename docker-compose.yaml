@@ -1,7 +1,7 @@
 services:
   bailiff:
     build: .
-    image: chamberlain/bailiff:latest
+    image: bailiff:latest
     container_name: bailiff
     restart: unless-stopped
     network_mode: host
@@ -11,10 +11,11 @@ services:
       BAILIFF_HOST: ${BAILIFF_HOST:-0.0.0.0}
       BAILIFF_PORT: ${BAILIFF_PORT:-8100}
       BAILIFF_PATH: ${BAILIFF_PATH:-/mcp}
-      CATCHPOLE_URL: ${CATCHPOLE_URL:-http://localhost:4000}
-      CATCHPOLE_API_KEY: ${CATCHPOLE_API_KEY:-}
-      CATCHPOLE_MODEL: ${CATCHPOLE_MODEL:-lm_studio/local}
-      SCRIBE_URL: ${SCRIBE_URL:-http://localhost:8000/mcp}
-      SCRIBE_LABEL: ${SCRIBE_LABEL:-scribe}
+      UPSTREAM_URL: ${UPSTREAM_URL:-http://localhost:4000}
+      UPSTREAM_API_KEY: ${UPSTREAM_API_KEY:-}
+      UPSTREAM_MODEL: ${UPSTREAM_MODEL:-local}
+      KNOWLEDGE_URL: ${KNOWLEDGE_URL:-http://localhost:8000/mcp}
+      KNOWLEDGE_LABEL: ${KNOWLEDGE_LABEL:-knowledge}
+      KNOWLEDGE_TOOL: ${KNOWLEDGE_TOOL:-search_archives}
       BAILIFF_TIMEOUT: ${BAILIFF_TIMEOUT:-180}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}

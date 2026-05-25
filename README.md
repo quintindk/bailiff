@@ -1,30 +1,37 @@
-# Bailiff — The Delegate
+# Bailiff
 
-Bailiff is the client-side MCP server pillar of [Chamberlain](../README.md). It is the only component the coding agent talks to. It exposes a single tool — `ask` — that fans the question out through the full Chamberlain stack and returns a synthesised, citation-bearing answer.
+Bailiff is a tiny client-side MCP server that exposes a single `ask` tool to coding agents (Copilot CLI, Claude Desktop, Cursor, etc.). The agent asks a natural-language question; Bailiff delegates retrieval and synthesis to an upstream model that itself has an MCP knowledge tool attached. The agent receives a finished, citation-bearing answer — never raw vector chunks — saving its own context budget.
 
-## Architecture
+## How it works
 
 ```
 Agent (Copilot CLI / Claude Desktop / Cursor)
-   │  MCP tool: ask(query)
+   │  MCP: ask(query)
    ▼
 Bailiff
-   │  POST /v1/responses  +  tools=[{type:mcp, server:scribe}]
+   │  POST /v1/responses + tools=[{type:mcp, server_url:<knowledge>}]
    ▼
-Catchpole  ─►  LM Studio  ─MCP─►  Scribe  ─►  Qdrant
-                  ▲                 │
-                  └── synthesised ──┘
+Upstream (LiteLLM gateway, LM Studio, or anything /v1/responses-compatible)
+   │  model autonomously calls the knowledge MCP server during inference
+   ▼
+Knowledge MCP server  ─►  Vector DB
+   │
+   └── synthesised answer ──► back up the chain
 ```
 
-LM Studio's `/v1/responses` endpoint accepts a `tools` array with `{type: "mcp", server_label, server_url}` blocks. During inference the model autonomously calls Scribe, retrieves chunks, and writes a final answer. Bailiff just unwraps the response text and returns it to the agent.
+Bailiff itself is ~140 lines of Python. It does three things:
 
-> The OpenAI-compatible `/v1/chat/completions` endpoint silently drops MCP tools. Use `/v1/responses`.
+1. Receives the `ask(query)` MCP call.
+2. POSTs `query` to `${UPSTREAM_URL}/v1/responses` with a `tools` array containing one `{type:"mcp"}` block pointing at `${KNOWLEDGE_URL}`.
+3. Unwraps the `output_text` and returns it.
+
+> The OpenAI-compatible `/v1/chat/completions` endpoint silently drops MCP tool blocks. Use `/v1/responses`.
 
 ## Tool
 
 | Tool | Description |
 | --- | --- |
-| `ask(query)` | Ask anything about the Chamberlain estate. Returns a synthesised markdown answer with file path citations. |
+| `ask(query)` | Ask a natural-language question. Returns a synthesised markdown answer with file path citations. |
 
 ## Quick start
 
@@ -32,7 +39,7 @@ LM Studio's `/v1/responses` endpoint accepts a `tools` array with `{type: "mcp",
 
 ```bash
 cp .env.example .env
-# defaults are sane for a local stack on the same host
+# edit .env for your upstream + knowledge server, then:
 docker compose up -d
 docker compose logs -f bailiff
 ```
@@ -50,20 +57,20 @@ python bailiff.py
 
 ### Agent wiring
 
-**Copilot CLI / generic stdio client:**
+**Stdio client (Copilot CLI, generic MCP):**
 
 ```json
 {
   "mcpServers": {
     "bailiff": {
       "command": "python",
-      "args": ["/path/to/chamberlain/bailiff/bailiff.py"]
+      "args": ["/path/to/bailiff/bailiff.py"]
     }
   }
 }
 ```
 
-**HTTP-based client (Claude Desktop streamable-http, etc.):**
+**HTTP client (Claude Desktop streamable-http, etc.):**
 
 ```json
 {
@@ -77,18 +84,23 @@ python bailiff.py
 
 ## Configuration
 
+All settings come from environment variables.
+
 | Var | Default | Notes |
 | --- | --- | --- |
 | `BAILIFF_TRANSPORT` | `stdio` | `stdio` for agent integration, `http` for shared deployments. |
 | `BAILIFF_HOST` / `BAILIFF_PORT` / `BAILIFF_PATH` | `0.0.0.0` / `8100` / `/mcp` | HTTP bind. |
-| `CATCHPOLE_URL` | `http://localhost:4000` | LiteLLM proxy. |
-| `CATCHPOLE_API_KEY` | _empty_ | Master key for Catchpole. |
-| `CATCHPOLE_MODEL` | `lm_studio/local` | Model alias to invoke. |
-| `SCRIBE_URL` | `http://localhost:8000/mcp` | Embedded in the MCP tool block sent to LM Studio. |
-| `SCRIBE_LABEL` | `scribe` | Label passed through to LM Studio. |
-| `BAILIFF_TIMEOUT` | `180` | Seconds to wait for Catchpole. |
-| `BAILIFF_INSTRUCTIONS` | _see code_ | System instructions for the model. |
+| `UPSTREAM_URL` | `http://localhost:4000` | Any host exposing OpenAI `/v1/responses` with MCP tool support. |
+| `UPSTREAM_API_KEY` | _empty_ | Bearer token for the upstream, if required. |
+| `UPSTREAM_MODEL` | `local` | Model identifier the upstream expects. |
+| `KNOWLEDGE_URL` | `http://localhost:8000/mcp` | URL of the knowledge MCP server, sent in the tool block. Must be reachable *from the upstream*, not from Bailiff. |
+| `KNOWLEDGE_LABEL` | `knowledge` | Server label inside the tool block. |
+| `KNOWLEDGE_TOOL` | `search_archives` | Name of the retrieval tool the model is allowed to call. |
+| `BAILIFF_TIMEOUT` | `180` | Seconds to wait for the upstream. |
+| `BAILIFF_INSTRUCTIONS` | _see code_ | System instructions handed to the upstream model. |
 | `LOG_LEVEL` | `INFO` | Standard Python log level. |
+
+> `KNOWLEDGE_URL` is fetched by the upstream, not by Bailiff. If the upstream runs on a different host (e.g. LM Studio on Windows, Bailiff on WSL), this URL must resolve from the upstream's network namespace.
 
 ## Smoke test
 
@@ -98,17 +110,16 @@ from fastmcp import Client
 
 async def main():
     async with Client("http://localhost:8100/mcp") as c:
-        r = await c.call_tool("ask", {"query": "What does the _decide function in Catchpole do?"})
+        r = await c.call_tool("ask", {"query": "What's in the indexed archives?"})
         print(r.data)
 
 asyncio.run(main())
 ```
 
-You should get a synthesised answer that cites `catchpole.py`. Watch the Scribe logs in parallel — you'll see a `CallToolRequest` with the right query.
+## Requirements
 
-## See also
-
-- The [Chamberlain Architecture specification](../specification.md).
-- [Scribe](../scribe/) — the knowledge MCP server Bailiff references.
-- [Catchpole](../catchpole/) — the gateway Bailiff posts to.
-- [Miller](../miller/) — the ingester that populates the archive.
+- Python 3.10+
+- `fastmcp >= 2.0`
+- `httpx >= 0.27`
+- An upstream that speaks OpenAI `/v1/responses` and honours `{type:"mcp"}` tool blocks (LM Studio recent builds, LiteLLM proxies, etc.).
+- An MCP server exposing a retrieval tool over the upstream's network.
