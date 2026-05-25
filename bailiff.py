@@ -1,14 +1,14 @@
 """
 Bailiff — The Delegate.
 
-A client-side FastMCP server exposing a single `query_knowledge_base` tool.
+A client-side FastMCP server exposing a single `ask` tool.
 The calling agent (Copilot CLI, Claude Desktop, Cursor, etc.) sees this tool
 and invokes it when it needs project knowledge. Bailiff forwards the query
 to Catchpole's /v1/responses endpoint with an MCP tool block pointing at
 Scribe, so LM Studio retrieves and synthesises an answer during inference.
 
 Flow:
-    Agent  -- MCP tool: query_knowledge_base(q) -->  Bailiff
+    Agent  -- MCP tool: ask(q) -->  Bailiff
     Bailiff -- POST /v1/responses (+ Scribe tool block) -->  Catchpole
     Catchpole -- /v1/responses (with MCP tools) -->  LM Studio
     LM Studio -- mcp_call: search_archives -->  Scribe -->  Qdrant
@@ -54,8 +54,8 @@ mcp = FastMCP(
     name="bailiff",
     instructions=(
         "Bailiff is the delegate to the Chamberlain knowledge engine. Call "
-        "`query_knowledge_base` with a natural-language question to receive "
-        "a synthesised answer backed by the project's code and docs."
+        "`ask` with a natural-language question to receive a synthesised "
+        "answer backed by the project's code and docs."
     ),
 )
 
@@ -81,8 +81,9 @@ def _extract_text(response_json: dict[str, Any]) -> str:
 
 
 @mcp.tool
-async def query_knowledge_base(query: str) -> str:
-    """Query the unified Chamberlain knowledge base.
+async def ask(query: str) -> str:
+    """Ask the Chamberlain knowledge engine a natural-language question and
+    receive a synthesised answer (not raw vector chunks).
 
     Sends `query` to the Catchpole gateway, which routes to a local model
     that uses the Scribe MCP server to retrieve and synthesise relevant

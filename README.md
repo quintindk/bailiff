@@ -1,12 +1,12 @@
 # Bailiff — The Delegate
 
-Bailiff is the client-side MCP server pillar of [Chamberlain](../README.md). It is the only component the coding agent talks to. It exposes a single tool — `query_knowledge_base` — that fans the question out through the full Chamberlain stack and returns a synthesised, citation-bearing answer.
+Bailiff is the client-side MCP server pillar of [Chamberlain](../README.md). It is the only component the coding agent talks to. It exposes a single tool — `ask` — that fans the question out through the full Chamberlain stack and returns a synthesised, citation-bearing answer.
 
 ## Architecture
 
 ```
 Agent (Copilot CLI / Claude Desktop / Cursor)
-   │  MCP tool: query_knowledge_base(query)
+   │  MCP tool: ask(query)
    ▼
 Bailiff
    │  POST /v1/responses  +  tools=[{type:mcp, server:scribe}]
@@ -24,7 +24,7 @@ LM Studio's `/v1/responses` endpoint accepts a `tools` array with `{type: "mcp",
 
 | Tool | Description |
 | --- | --- |
-| `query_knowledge_base(query)` | Ask anything about the Chamberlain estate. Returns a synthesised markdown answer with file path citations. |
+| `ask(query)` | Ask anything about the Chamberlain estate. Returns a synthesised markdown answer with file path citations. |
 
 ## Quick start
 
@@ -98,7 +98,7 @@ from fastmcp import Client
 
 async def main():
     async with Client("http://localhost:8100/mcp") as c:
-        r = await c.call_tool("query_knowledge_base", {"query": "What does the _decide function in Catchpole do?"})
+        r = await c.call_tool("ask", {"query": "What does the _decide function in Catchpole do?"})
         print(r.data)
 
 asyncio.run(main())
