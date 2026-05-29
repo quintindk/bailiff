@@ -33,6 +33,22 @@ Bailiff itself is ~140 lines of Python. It does three things:
 | --- | --- |
 | `ask(query)` | Ask a natural-language question. Returns a synthesised markdown answer with file path citations. |
 
+The upstream model is given the full **Scribe** v1 tool surface (search + memory + ingest) by default. Which Scribe tools the model may actually call is governed by `KNOWLEDGE_ALLOWED_TOOLS`; the *policy* for when to use each one lives in `system_prompt.md` (shipped in the image, override via volume mount).
+
+## System prompt
+
+The instructions sent to the upstream model on every request are loaded from `BAILIFF_SYSTEM_PROMPT_FILE` (default `/app/system_prompt.md` inside the container). The default file covers memory usage, archive search, and ingest restraint per `specification.md §6.1`. To customise without rebuilding:
+
+```yaml
+# docker-compose.yaml
+services:
+  bailiff:
+    volumes:
+      - ./my_prompt.md:/app/system_prompt.md:ro
+```
+
+Inline override via the `BAILIFF_INSTRUCTIONS` env var takes precedence over the file when set.
+
 ## Quick start
 
 ### Container (HTTP transport)
@@ -95,9 +111,11 @@ All settings come from environment variables.
 | `UPSTREAM_MODEL` | `local` | Model identifier the upstream expects. |
 | `KNOWLEDGE_URL` | `http://localhost:8000/mcp` | URL of the knowledge MCP server, sent in the tool block. Must be reachable *from the upstream*, not from Bailiff. |
 | `KNOWLEDGE_LABEL` | `knowledge` | Server label inside the tool block. |
-| `KNOWLEDGE_TOOL` | `search_archives` | Name of the retrieval tool the model is allowed to call. |
+| `KNOWLEDGE_ALLOWED_TOOLS` | _full Scribe v1 surface_ | Comma-separated list of Scribe tool names the upstream model may call. Defaults to all nine. |
+| `KNOWLEDGE_TOOL` | _unset_ | Back-compat single-tool override. If set, takes precedence over `KNOWLEDGE_ALLOWED_TOOLS`. |
+| `BAILIFF_SYSTEM_PROMPT_FILE` | `/app/system_prompt.md` | Path inside the container to the system prompt sent to the upstream model. |
+| `BAILIFF_INSTRUCTIONS` | _unset_ | Inline override for the system prompt. If set, takes precedence over the file. |
 | `BAILIFF_TIMEOUT` | `180` | Seconds to wait for the upstream. |
-| `BAILIFF_INSTRUCTIONS` | _see code_ | System instructions handed to the upstream model. |
 | `LOG_LEVEL` | `INFO` | Standard Python log level. |
 
 > `KNOWLEDGE_URL` is fetched by the upstream, not by Bailiff. If the upstream runs on a different host (e.g. LM Studio on Windows, Bailiff on WSL), this URL must resolve from the upstream's network namespace.

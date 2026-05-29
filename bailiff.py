@@ -48,17 +48,58 @@ UPSTREAM_MODEL = _env("UPSTREAM_MODEL", "local")
 
 KNOWLEDGE_URL = _env("KNOWLEDGE_URL", "http://localhost:8000/mcp")
 KNOWLEDGE_LABEL = _env("KNOWLEDGE_LABEL", "knowledge")
-KNOWLEDGE_TOOL = _env("KNOWLEDGE_TOOL", "search_archives")
+
+# Comma-separated list of Scribe tools the upstream model may call.
+# Default exposes the full Scribe v1 surface (search + memory + ingest).
+# Back-compat: if KNOWLEDGE_TOOL is set, it overrides as a single tool.
+_DEFAULT_ALLOWED_TOOLS = (
+    "search_archives,list_collections,"
+    "recall,remember,forget,list_memories,"
+    "ingest_url,ingest_path,forget_collection"
+)
+_legacy_single = _env("KNOWLEDGE_TOOL")
+KNOWLEDGE_ALLOWED_TOOLS = [
+    t.strip() for t in (_legacy_single or _env("KNOWLEDGE_ALLOWED_TOOLS", _DEFAULT_ALLOWED_TOOLS)).split(",")
+    if t.strip()
+]
 
 REQUEST_TIMEOUT = float(os.getenv("BAILIFF_TIMEOUT", "180"))
-SYSTEM_INSTRUCTIONS = os.getenv(
-    "BAILIFF_INSTRUCTIONS",
-    (
-        f"You are a knowledge engine. Call the `{KNOWLEDGE_TOOL}` tool to "
-        "retrieve relevant context from the indexed archives before "
-        "answering. Cite file paths in your synthesised answer."
-    ),
+
+SYSTEM_PROMPT_FILE = _env("BAILIFF_SYSTEM_PROMPT_FILE", "/app/system_prompt.md")
+_DEFAULT_INLINE_INSTRUCTIONS = (
+    "You are a knowledge engine. Use the attached Scribe tools to retrieve "
+    "context from the indexed archives, recall stored memories when relevant, "
+    "and synthesise a single citation-bearing answer. Do not return raw tool "
+    "output verbatim."
 )
+
+
+def _load_system_prompt() -> str:
+    """Load the upstream system prompt from file, with env-var fallback.
+
+    Priority:
+      1. `BAILIFF_INSTRUCTIONS` env var, if set (inline override).
+      2. File at `BAILIFF_SYSTEM_PROMPT_FILE`, if it exists.
+      3. Built-in minimal default.
+    """
+    inline = os.getenv("BAILIFF_INSTRUCTIONS")
+    if inline:
+        LOG.info("System prompt: loaded from BAILIFF_INSTRUCTIONS env var (%d chars)", len(inline))
+        return inline
+    try:
+        text = open(SYSTEM_PROMPT_FILE, encoding="utf-8").read().strip()
+        if text:
+            LOG.info("System prompt: loaded from %s (%d chars)", SYSTEM_PROMPT_FILE, len(text))
+            return text
+        LOG.warning("System prompt file %s is empty; using built-in default", SYSTEM_PROMPT_FILE)
+    except FileNotFoundError:
+        LOG.warning("System prompt file %s not found; using built-in default", SYSTEM_PROMPT_FILE)
+    except Exception as exc:
+        LOG.warning("Failed to read %s: %s; using built-in default", SYSTEM_PROMPT_FILE, exc)
+    return _DEFAULT_INLINE_INSTRUCTIONS
+
+
+SYSTEM_INSTRUCTIONS = _load_system_prompt()
 
 mcp = FastMCP(
     name="bailiff",
@@ -104,7 +145,7 @@ async def ask(query: str) -> str:
                 "type": "mcp",
                 "server_label": KNOWLEDGE_LABEL,
                 "server_url": KNOWLEDGE_URL,
-                "allowed_tools": [KNOWLEDGE_TOOL],
+                "allowed_tools": KNOWLEDGE_ALLOWED_TOOLS,
             }
         ],
     }

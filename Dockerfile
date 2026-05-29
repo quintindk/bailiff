@@ -12,7 +12,7 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install -r requirements.txt
 
-COPY bailiff.py .
+COPY bailiff.py system_prompt.md ./
 
 EXPOSE 8100
 ENTRYPOINT ["/usr/bin/tini", "--"]

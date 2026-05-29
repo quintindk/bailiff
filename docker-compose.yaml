@@ -16,6 +16,12 @@ services:
       UPSTREAM_MODEL: ${UPSTREAM_MODEL:-local}
       KNOWLEDGE_URL: ${KNOWLEDGE_URL:-http://localhost:8000/mcp}
       KNOWLEDGE_LABEL: ${KNOWLEDGE_LABEL:-knowledge}
-      KNOWLEDGE_TOOL: ${KNOWLEDGE_TOOL:-search_archives}
+      KNOWLEDGE_ALLOWED_TOOLS: ${KNOWLEDGE_ALLOWED_TOOLS:-}
+      KNOWLEDGE_TOOL: ${KNOWLEDGE_TOOL:-}
+      BAILIFF_SYSTEM_PROMPT_FILE: ${BAILIFF_SYSTEM_PROMPT_FILE:-/app/system_prompt.md}
+      BAILIFF_INSTRUCTIONS: ${BAILIFF_INSTRUCTIONS:-}
       BAILIFF_TIMEOUT: ${BAILIFF_TIMEOUT:-180}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    # Mount a custom prompt to override the baked-in default without rebuilding:
+    # volumes:
+    #   - ./system_prompt.md:/app/system_prompt.md:ro
