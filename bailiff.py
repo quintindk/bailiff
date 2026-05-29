@@ -57,11 +57,10 @@ _DEFAULT_ALLOWED_TOOLS = (
     "recall,remember,forget,list_memories,"
     "ingest_url,ingest_path,forget_collection"
 )
-_legacy_single = _env("KNOWLEDGE_TOOL")
-KNOWLEDGE_ALLOWED_TOOLS = [
-    t.strip() for t in (_legacy_single or _env("KNOWLEDGE_ALLOWED_TOOLS", _DEFAULT_ALLOWED_TOOLS)).split(",")
-    if t.strip()
-]
+_legacy_single = (_env("KNOWLEDGE_TOOL") or "").strip()
+_list_env = (_env("KNOWLEDGE_ALLOWED_TOOLS") or "").strip()
+_tools_str = _legacy_single or _list_env or _DEFAULT_ALLOWED_TOOLS
+KNOWLEDGE_ALLOWED_TOOLS = [t.strip() for t in _tools_str.split(",") if t.strip()]
 
 REQUEST_TIMEOUT = float(os.getenv("BAILIFF_TIMEOUT", "180"))
 
